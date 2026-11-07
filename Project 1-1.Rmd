@@ -1,0 +1,289 @@
+---
+title: "Project 1: Breast Cancer Diagnosis"
+author: "Adalee Nguyen"
+date: "2026-10-23"
+output:
+  html_document:
+    theme:
+      version: 5
+      bg: "#FFF0F5"         # Lavender blush (soft pink background)
+      fg: "#4A2E35"         # Deep muted rose/brown for text
+      primary: "#D87093"    # Pale violet red (pink accent for links/buttons)
+      secondary: "#FFB6C1"  # Light pink
+      base_font:
+        google: "Inter"
+      heading_font:
+        google: "Playfair Display"
+---
+
+```{r setup, echo = FALSE, include = FALSE}
+# Load libraries
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(ucimlrepo)
+library(bslib)
+library(showtext)
+font_add_google("Inter", family = "Inter")
+showtext_auto()
+
+# Global chunk options
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = TRUE,
+  warning = TRUE,
+  comment = ""
+)
+```
+
+
+
+## Introduction
+
+Breast cancer is a type of cancer that starts in the breast and occurs when abnormal cells start to multiply uncontrollably. These cells then go on to form tumors that will eventually spread to the rest of the body if left untreated.  
+
+This type of cancer is the second leading cause of cancer death for women in the United States [[2]](https://www.nationalbreastcancer.org/what-is-breast-cancer/). It is estimated that 1 in 8 women in the U.S. will develop breast cancer and the chances that a woman will die from it is 1 in 43 [[2]](https://www.nationalbreastcancer.org/what-is-breast-cancer/).  
+
+Breast cancer is not an issue that affects just the U.S. as it is actually the most common cancer for a woman to be diagnosed with worldwide. In 2024 alone, 2.4 million women were estimated to have been diagnosed with breast cancer and around 694,000 women were estimated to have died from it [[1]](https://www.who.int/news-room/fact-sheets/detail/breast-cancer).
+
+### How can Data Science be used to Diagnosis Breast Cancer?
+
+I wanted to explore this topic as for most types of cancers, early detection significantly increases a person's chances of survival.
+
+This holds true for breast cancer as 26% of women who receive regular screening are less likely to die from breast cancer than women who do not participate in these screenings [[2]](https://www.nationalbreastcancer.org/what-is-breast-cancer/).
+
+By using data science to analyze breast cancer data, we can effectively determine the characteristics that make cancer cells different from normal cells. This may help doctors better understand what they should be looking for when diagnosing breast cancer and may help them do so more efficiently. This data may also inspire researchers to investigate why these differences exist. 
+
+### The Chosen Dataset 
+
+The ["Breast Cancer Wisonsin (Diagnostic)"](https://doi.org/10.24432/C5DW2B) dataset can be found in the UCI Machine Learning Repository. The data was collected by William Wolberg, Nick Street, and Olvi Mangasarian. This dataset contains measurements of cell nuclei taken from images of fine needle aspirates of breast tissue samples obtained from patients at the University of Wisconsin Hospital. 
+
+I will be using most of the variables within this dataset for my analysis.
+
+By analyzing this data, I hope to answer the question:
+"What physical characteristics set a cancerous cell apart from a benign cell?"
+
+## Data Cleaning
+
+First, I wanted to start by examining the dataset. 
+
+```{r data_sum, echo = TRUE}
+dl = fetch_ucirepo(id = 17)
+df = dl$data$original
+
+str(df)
+```
+```{r data_sum2, echo = FALSE, include = FALSE}
+summary(df)
+head(df)
+```
+
+### Filtering
+
+I then want to check my dataset to see if it contains any missing values.
+
+```{r na_check, echo = TRUE}
+any(is.na(df))
+```
+
+Because there are no missing values in the dataset, I will proceed by setting up my data frame, so it's a little easier to understand.
+
+### Identifying and Tidying
+
+Each variable has 3 statistical measurements taken for it [[4]](https://doi.org/10.1117/12.148698).   
+
+For example,  
+- radius1 represents its mean.  
+- radius2 represents its standard error.  
+- radius3 represents the average of its "worst" (largest) values.  
+
+The variables these measurements are recorded for are: radius, texture, perimeter, area, smoothness, compactness, concavity, concave points, symmetry, and fractal dimension.
+
+This dataset also assigns a diagnosis for each cell.  
+- "M": Malignant which means the cell is cancerous.  
+- "B": Benign which means the cell is non-cancerous.  
+
+I will get rid of the ID column from the dataset because it does not provide any relevant information needed for this analysis. 
+
+```{r df_nonID, echo = TRUE, results = "hide"}
+df = df %>%
+  select(-ID)
+
+df
+```
+
+Now that this dataset has been closely examined and cleaned, we can move on to analysis.
+
+## Exploring the Data
+
+### How does the size of a malignant cell compare to that of a benign cell?
+
+#### Why this question?
+
+The size of a cell is one of the first characteristics a doctor would notice on first glance. Knowing how the sizes of benign and malignant cells compare could help doctors make quicker diagnoses.
+
+```{r graph1}
+ggplot(data = df,
+       aes(x=area1, fill = Diagnosis)
+       )+
+  geom_density(
+    alpha = 0.5
+  )+ 
+  labs(
+    title = "Density of Cell Area by Diagnosis",
+    x = "Average Area",
+    y = "Density"
+  ) +
+  scale_fill_manual(
+    name = "Diagnosis",
+    labels = c("Benign", "Malignant"),
+    values = c(
+      "B" = "#C49A32",
+      "M" = "#985F7D"
+        ),
+    
+  )+
+  theme(text = element_text(family = "Inter", size = 20))
+```
+
+While this comparison seems simple, it reveals a lot about the patterns we may see between malignant and benign cells. The area of the benign cells are a lot more uniform and peak at about 500 squared pixels. However, the area of the malignant cells is a lot more spread out and does not have a single peak. Instead, the majority of the cells seem to be around the 750 to 1250 range, with some cells reaching up to 2500. The density map also shows that there is significant overlap between the areas of cells for both diagnoses. This overlap indicates that even though a cell with an area of 500 is most likely to be benign, area alone is not enough to decide on a diagnosis. 
+
+```{r graph2}
+ggplot(data = df, 
+       aes(x = factor(Diagnosis, levels = c("B", "M"), 
+                      labels = c("Benign", "Malignant")), 
+           y = radius1,
+           fill = factor(Diagnosis, 
+                         levels = c("B", "M"), 
+                         labels = c("Benign", "Malignant")))) +
+  geom_boxplot(
+    
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Benign" = "#C49A32",
+      "Malignant" = "#985F7D"
+    ))+
+  labs(
+    title = "Radius of Cell by Diagnosis",
+    x = "Diagnosis",
+    y = "Radius",
+    fill = "Diagnosis"
+  )+
+  theme(text = element_text(family = "Inter", size = 20))
+```
+
+While comparing the area, I also wanted to take a look at the radius of the cell to get a more complete look at the measurements of the cell's overall size. Seeing a couple of clear statistical measurements on a graph together allows us to confirm that benign cells are more uniform and smaller while malignant cells are bigger and a lot more spread out size wise. It also shows us that for certain radii measurements a cut off measurement exists that can easily identify a non cancerous versus cancerous cell. For example, a radius of 20 pixels and higher is extremely likely to be a malignant cell while a radius of 10 pixels or lower is extremely likely to be a benign cell.
+
+### How does the standard error of a cell's concavity compare to the standard error of the number of its concave points in both benign and malignant cells?
+
+#### Why this question?
+
+By answering the previous question, it is apparent that malignant cells often have wider ranges of area. From this data we can draw the conclusion that cancerous cells are often larger and vary more in size than non-cancerous cells. However, I wanted to test if the shape of their cells was also abnormal and not just their size. 
+
+```{r graph3}
+ggplot(data = df,
+       aes(x= concavity2, y = concave_points2, color = factor(Diagnosis, levels = c("B", "M"), labels = c("Benign", "Malignant")))
+           )+
+  geom_point(
+    
+  )+
+  scale_color_manual(
+    values = c(
+      "Benign" = "#C49A32",
+      "Malignant" = "#985F7D"
+    ))+
+  labs(
+    title = "Concavity vs. Concave Points Standard Error by Diagnosis",
+    x = "Concavity Standard Error",
+    y = "Concave Points Standard Error",
+    color = "Diagnosis"
+  )+
+  coord_cartesian(xlim = c(0,0.16), ylim = c(0, 0.045))+
+  theme(text = element_text(family = "Inter", size = 20))
+```
+
+Looking at the standard error allows us to see how much the mean varies within the data. Concave points refers to how many curve like pockets there are around around the perimeter, and concavity refers to the depth of these points. From this graph, we can see how the standard error of the concave points and the concavity for the benign cells are centered around and close to the (0,0) origin. This indicates that benign cells are uniform in shape. We can see that a majority of malignant cells have higher standard errors for both their concavity and concave points. A distinct separation exists between the two cell types.
+
+## Are cells with large perimeters smoother or rougher in both benign and malignant cells?
+
+### Why this question?
+
+Now that we know that both the size and shape of a malignant cell can vary greatly from that of a benign cell, it's important to look at how these attributes connect to each other. Size characteristics and shape characteristics do not exist separately from each other. They directly impact each other, and it's important for researchers to recognize when these patterns exist to make more accurate diagnoses. 
+
+```{r graph4}
+
+ggplot(data = df, aes(x = perimeter3, y = texture3)) +
+  geom_bin2d(bins = 30) + 
+  facet_wrap(~factor(Diagnosis, levels = c("B", "M"), labels = c("Benign", "Malignant"))) +
+  scale_fill_viridis_c(option = "plasma") + 
+  labs(
+    title = "Worst Perimeter vs. Worst Texture by Diagnosis",
+    x = "Worst Perimeter",
+    y = "Worst Texture",
+    fill = "Number of Cells"
+  )+
+  theme(text = element_text(family = "Inter", size = 20))
+  
+```
+
+
+This heatmap shows that the majority of benign cells with the largest perimeters are relatively smooth and do not have a lot of irregularities. For malignant cells, the range of the largest perimeter sizes are quite spread out. Additionally, their texture values are a lot higher than the benign cells and indicate that they contain more irregularities.The cells are also a lot more spread out and there is less of a focal point. It's also interesting to note that benign cells can have a worst texture value that aligns with what the majority of the malignant cells have. This could indicate that only lower texture values are actually a good indicator of whether or not a cell is benign or malignant. 
+
+## Conclusion
+
+### The Answer: "What physical characteristics set a cancerous cell apart from a benign cell?"
+
+- Almost all values for the characteristics in this dataset differed between benign and malignant
+- Area, radius, concavity, number of concave points, perimeter, and texture 
+  - These were the characteristics I explored
+  - All could be used to get a rough idea of the cell's diagnosis
+  - However, an important caveat is that overlap exists
+    - For example, larger than average cell size does not necessarily equal a malignant cell
+    - Multiple characteristics should be looked at before making a diagnosis
+    
+### Major Findings/Patterns
+
+- Malignant cells are abnormal in both size and shape
+  - Area and radius had larger values and a larger range 
+      - Indicates a lot of variance in cell size
+  - Concavity and concave points had higher standard errors 
+      - Indicates a lot of variance in cell shape
+  - Cells with large perimeters had a wider range of both worst textures and worst perimeters
+    - More dispersed with less focal points    
+
+- Benign cells were more uniform in both size and shape
+  - Area and radius had smaller values and a smaller range
+    - Indicates less variance in cell size
+  - Concavity and concave points had lower standard errors and were concentrated around (0,0)
+    - Indicates less variance in cell shape
+  - The majority with large perimeters had a smoother, less irregular texture
+    - Majority were smooth but also had a high maximum for cell texture
+    - More concentrated and had a focal point
+    
+### Limitations
+
+- Can only test characteristics that exist in the dataset
+- The data is taken from images of cells so everything is measured in pixels and not always precise
+    
+### Explanations
+
+- Cancerous cells are dangerous because they are abnormal
+  - Analysis proves that this true and to what extent these differences exist
+- Characteristics do not exist in a vacuum to each other
+  - Result in patterns and trends that can help identify a cell
+  
+### Future Analysis/Research
+
+- Compare more characteristics for breast cancer cells
+- See if these patterns hold true for other cancers
+- Analyze other factors like age and lifestyle and see how they compare to the characteristic's data
+- Train a machine learning model to accurately diagnose cells
+
+## References
+
+[1] “Breast cancer.” World Health Organization (WHO), https://www.who.int/news-room/fact-sheets/detail/breast-cancer.     
+[2] Shockney, Lillie D. “What is Breast Cancer?” National Breast Cancer Foundation, https://www.nationalbreastcancer.org/what-is-breast-cancer/.   
+[3] “R Markdown Syntax: Headings & Lists.” R Markdown Syntax: Headings & Lists – Authoring Scientific Publications with R Markdown, https://carpentry.library.ucsb.edu/R-markdown/03-headings-lists/index.html.
+[4] W. Nick Street, W. H. Wolberg, O. L. Mangasarian "Nuclear feature extraction for breast tumor diagnosis", Proc. SPIE 1905, Biomedical Image Processing and Biomedical Visualization, null (29 Jul 1993); https://doi.org/10.1117/12.148698     
+[5] Wolberg, William, et al. "Breast Cancer Wisconsin (Diagnostic)." UCI Machine Learning Repository, 1993, https://doi.org/10.24432/C5DW2B.
